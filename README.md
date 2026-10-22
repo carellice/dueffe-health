@@ -15,6 +15,7 @@ I moduli per farmaci, visite e documenti guidano l'inserimento in passaggi. Per 
 ## Avvio e distribuzione
 
 - `run-pixel.command` avvia il primo AVD Pixel disponibile, compila e installa la build debug. È eseguibile con doppio clic dal Finder e chiude la finestra Terminal al completamento riuscito.
+- `release-apk.bat` è la versione per Windows dello script di rilascio: stessa logica e stessa chiave in `.secrets\`, eseguibile con doppio clic da Esplora file (imposta `HEALTH_NO_PAUSE=1` per non attendere un tasto alla fine).
 - `release-apk.command` incrementa `VERSION_CODE` e la patch di `VERSION_NAME`, compila un APK firmato e pubblica soltanto il file APK come release `health-vX.Y.Z` in `carellice/android-app-releases` (modificabile con `RELEASE_REPO=owner/repo`). Dopo la pubblicazione elimina solo le release precedenti con tag `health-v*` e solo i relativi tag, lasciando intatte quelle delle altre app. Salva la nuova versione nel progetto solo al completamento del rilascio. È eseguibile con doppio clic dal Finder e chiude la finestra Terminal al completamento riuscito.
 
 Requisiti: Android Studio con SDK 36, JDK 17 o più recente compatibile con Gradle, `gh auth login` con accesso alla repository. Per la firma lo script crea al primo avvio `.secrets/health-release.jks`; conservarne una copia sicura per aggiornare l'app senza reinstallarla.

@@ -242,9 +242,9 @@ fun AppUpdateCard(prefix: String, repository: String) {
         }
     }
     LaunchedEffect(repository, prefix) { checkUpdates() }
-    Card(Modifier.fillMaxWidth()) {
+    Card(Modifier.fillMaxWidth(), shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLowest)) {
         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("Aggiornamenti", style = MaterialTheme.typography.titleMedium)
+            Text("Aggiornamenti", style = MaterialTheme.typography.titleMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
             Text("Versione installata: $installedName", style = MaterialTheme.typography.bodySmall)
             when {
                 checking -> Text("Controllo aggiornamenti…")

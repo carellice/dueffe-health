@@ -8,541 +8,223 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.CalendarMonth
-import androidx.compose.material.icons.filled.Block
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.EventBusy
-import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.Inventory2
-import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.Medication
-import androidx.compose.material.icons.filled.MonitorHeart
-import androidx.compose.material.icons.filled.OpenInNew
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Schedule
-import androidx.compose.material.icons.filled.Sell
-import androidx.compose.material.icons.filled.Shield
-import androidx.compose.material.icons.filled.Sync
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.*
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.json.JSONObject
-import java.time.LocalDate
-import java.time.format.DateTimeFormatter
-import java.util.Locale
 
-@OptIn(ExperimentalMaterial3Api::class)
+private data class DetailField(val icon: ImageVector, val label: String, val value: String, val wide: Boolean = false)
+
 @Composable
 fun EntityDetailPage(
-    key: String, item: JSONObject?, store: HealthStore, dark: Boolean,
+    key: String, item: JSONObject?, store: HealthStore,
     onBack: () -> Unit, onEdit: () -> Unit, onOpenAttachment: () -> Unit
 ) {
     BackHandler(onBack = onBack)
-    val c = homeColors(dark)
-    val title = when (key) {
-        "medicines" -> "Dettaglio terapia"
-        "appointments" -> "Dettaglio visita"
-        "bookingReminders" -> "Dettaglio prenotazione"
-        else -> "Dettaglio documento"
-    }
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(title) },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Indietro") } }
-            )
+    val s = MaterialTheme.colorScheme
+    val area = when (key) { "medicines" -> Area.Therapy; "documents" -> Area.Document; else -> Area.Visit }
+    val c = areaColors(area)
+    if (item == null) {
+        Column(Modifier.fillMaxSize().background(s.background).statusBarsPadding().padding(20.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+            RoundIconButton(Icons.AutoMirrored.Rounded.ArrowBack, "Indietro", onBack)
+            EmptyState(Icons.Rounded.SearchOff, "Elemento non disponibile", "Potrebbe essere stato eliminato.")
         }
-    ) { padding ->
-        if (item == null) {
-            Column(Modifier.fillMaxSize().padding(padding).background(c.background).padding(20.dp)) {
-                Text("Elemento non disponibile", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = c.ink)
-                Text("Potrebbe essere stato eliminato.", color = c.muted)
+        return
+    }
+    val title: String
+    val eyebrow: String
+    val pills = mutableListOf<Triple<String, Color, Color>>()
+    val fields = mutableListOf<DetailField>()
+    var note = ""
+    var heroIcon: @Composable () -> Unit = {}
+    when (key) {
+        "medicines" -> {
+            title = item.str("nome").ifBlank { "Terapia" }
+            eyebrow = "Terapia"
+            val active = isMedicineActive(item)
+            pills += when {
+                item.bool("archiviata") -> Triple("Archiviata", s.onSurfaceVariant, s.surfaceContainerHigh)
+                isMedicineExpired(item) -> Triple("Terminata", s.error, s.errorContainer)
+                active -> Triple("Attiva", HealthStatus.success, HealthStatus.successContainer)
+                else -> Triple("Non ancora iniziata", s.primary, s.primaryContainer)
             }
-        } else if (key == "appointments") {
-            AppointmentDetailContent(item, c, Modifier.padding(padding), onEdit)
-        } else if (key == "medicines") {
-            MedicineDetailContent(item, store, c, Modifier.padding(padding), onEdit)
-        } else if (key == "documents") {
-            DocumentDetailContent(item, store, c, Modifier.padding(padding), onEdit, onOpenAttachment)
-        } else {
-            val name = when (key) {
-                "bookingReminders" -> item.str("tipoVisita")
-                else -> item.str("nome")
-            }.ifBlank { title }
-            val fields = when (key) {
-                "bookingReminders" -> listOf(
-                    "Periodo desiderato" to item.str("periodo"),
-                    "Data promemoria" to displayDate(item.str("dataPromemoria")),
-                    "Stato" to if (item.bool("prenotata")) "Prenotata" else "Da prenotare",
-                    "Note" to item.str("nota")
-                )
-                else -> {
-                    val linkedVisit = store.list("appointments").firstOrNull { it.str("id") == item.str("visitaId") }
-                    listOf(
-                        "Categoria" to item.str("categoria"),
-                        "Data" to displayDate(item.str("data")),
-                        "Formato" to documentFormatLabel(item),
-                        "Allegato" to item.str("fileName"),
-                        "Visita collegata" to linkedVisit?.str("tipo").orEmpty(),
-                        "Note" to item.str("note")
-                    )
-                }
-            }.filter { it.second.isNotBlank() }
-            LazyColumn(
-                Modifier.fillMaxSize().padding(padding).background(c.background),
-                contentPadding = PaddingValues(17.dp), verticalArrangement = Arrangement.spacedBy(14.dp)
+            val photo = remember(item.str("photo")) { item.str("photo").takeIf { it.isNotBlank() }?.let { runCatching { BitmapFactory.decodeFile(store.attachmentPath(it).path) }.getOrNull() } }
+            heroIcon = { if (photo != null) Image(photo.asImageBitmap(), "Foto di $title", Modifier.fillMaxSize(), contentScale = ContentScale.Crop) else CapsuleIcon(Color.White, Modifier.size(46.dp), highlight = c.accent) }
+            val prn = medicineFrequencyType(item) == "as_needed"
+            fields += DetailField(Icons.Rounded.Scale, "Dose", "${item.str("dosaggio")} ${item.str("unita")}".trim().ifBlank { "—" })
+            fields += DetailField(Icons.Rounded.Repeat, "Frequenza", medicineFrequencyDescription(item))
+            fields += DetailField(Icons.Rounded.Schedule, "Orari", if (prn) "Al bisogno" else item.strings("orari").joinToString("  ·  ") { doseTimeLabel(it) }.ifBlank { "—" }, wide = true)
+            fields += DetailField(Icons.Rounded.Medication, "Formulazione", item.str("formulazione").ifBlank { "—" })
+            fields += DetailField(Icons.Rounded.Inventory2, "Scorta", "${item.str("quantita")} ${item.str("quantitaUnita").ifBlank { item.str("unita") }}".trim().ifBlank { "—" })
+            fields += DetailField(Icons.Rounded.PlayCircle, "Inizio", item.str("dataInizio").takeIf { it.isNotBlank() }?.let(::displayDate) ?: "—")
+            fields += DetailField(Icons.Rounded.Flag, "Fine", if (item.bool("senzaFine", true)) "Senza scadenza" else item.str("dataFine").takeIf { it.isNotBlank() }?.let(::displayDate) ?: "—")
+            if (!prn) {
+                val notifications = item.optJSONObject("notifiche")
+                val enabled = notifications?.bool("attive", true) ?: true
+                val advances = notifications?.optJSONArray("anticipo")?.let { arr -> (0 until arr.length()).map { arr.optInt(it) } }.orEmpty()
+                fields += DetailField(Icons.Rounded.NotificationsActive, "Promemoria",
+                    if (!enabled) "Disattivati" else "All'orario della dose" + if (advances.isNotEmpty()) " e ${advances.sorted().joinToString(", ") { if (it == 60) "1 ora" else "$it min" }} prima" else "", wide = true)
+            }
+            note = item.str("note")
+        }
+        "appointments" -> {
+            title = item.str("tipo").ifBlank { "Visita medica" }
+            eyebrow = item.str("categoria").ifBlank { "Visita" }
+            pills += if (item.bool("completata")) Triple("Effettuata", HealthStatus.success, HealthStatus.successContainer)
+            else Triple(relativeDayLabel(item.str("data")), Color.White, Color.White.copy(alpha = 0.22f))
+            heroIcon = { StethoscopeIcon(Color.White, Modifier.size(44.dp), hole = c.accent) }
+            val doctor = item.str("medico").ifBlank { listOf(item.str("medicoNome"), item.str("medicoCognome")).filter { it.isNotBlank() }.joinToString(" ") }
+            fields += DetailField(Icons.Rounded.CalendarMonth, "Data", item.str("data").takeIf { it.isNotBlank() }?.let(::displayDate) ?: "—")
+            fields += DetailField(Icons.Rounded.Schedule, "Ora", item.str("ora").ifBlank { "—" })
+            fields += DetailField(Icons.Rounded.LocationOn, "Luogo", item.str("luogo").ifBlank { "Non indicato" }, wide = true)
+            fields += DetailField(Icons.Rounded.Person, "Medico", doctor.ifBlank { "Non indicato" }, wide = true)
+            val reports = item.optJSONObject("refertiReminder")
+            if (reports != null && reports.str("data").isNotBlank())
+                fields += DetailField(Icons.Rounded.Description, "Ritiro referti", listOf(
+                    displayDate(reports.str("data")), if (reports.bool("ritirati")) "ritirati" else "", reports.str("nota")
+                ).filter { it.isNotBlank() }.joinToString(" · "), wide = true)
+            note = item.str("note")
+        }
+        "bookingReminders" -> {
+            title = item.str("tipoVisita").ifBlank { "Visita da prenotare" }
+            eyebrow = "Da prenotare"
+            pills += if (item.bool("prenotata")) Triple("Prenotata", HealthStatus.success, HealthStatus.successContainer) else Triple("In attesa", Color.White, Color.White.copy(alpha = 0.22f))
+            heroIcon = { Icon(Icons.Rounded.NotificationsActive, null, Modifier.size(42.dp), tint = Color.White) }
+            fields += DetailField(Icons.Rounded.DateRange, "Periodo desiderato", item.str("periodo").takeIf { it.isNotBlank() }?.let(::periodLabel) ?: "Non indicato")
+            fields += DetailField(Icons.Rounded.Alarm, "Promemoria", displayDate(item.str("dataPromemoria")))
+            note = item.str("nota")
+        }
+        else -> {
+            title = item.str("nome").ifBlank { "Documento" }
+            val category = item.str("categoria").ifBlank { "Altro" }
+            eyebrow = category
+            pills += Triple(documentFormatLabel(item), Color.White, Color.White.copy(alpha = 0.22f))
+            heroIcon = { Icon(documentCategoryIcon(category), null, Modifier.size(42.dp), tint = Color.White) }
+            val linkedVisit = store.list("appointments").firstOrNull { it.str("id") == item.str("visitaId") }
+            fields += DetailField(Icons.Rounded.CalendarMonth, "Data", item.str("data").takeIf { it.isNotBlank() }?.let(::displayDate) ?: "—")
+            fields += DetailField(documentCategoryIcon(category), "Categoria", category)
+            if (linkedVisit != null) fields += DetailField(Icons.Rounded.EventAvailable, "Visita collegata", "${linkedVisit.str("tipo")} · ${displayDate(linkedVisit.str("data"))}", wide = true)
+            note = item.str("note")
+        }
+    }
+
+    LazyColumn(Modifier.fillMaxSize().background(s.background), contentPadding = PaddingValues(bottom = 40.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        item {
+            HeroSurface(
+                Modifier.fillMaxWidth().healthSharedBounds("$key-${item.str("id")}"),
+                brush = heroBrush(c.accent, if (area == Area.Therapy) s.secondary else s.primary),
+                shape = RoundedCornerShape(bottomStart = 36.dp, bottomEnd = 36.dp),
+                glow = c.accent
             ) {
-                item {
-                    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(c.surface).border(0.5.dp, c.border, RoundedCornerShape(18.dp)).padding(18.dp)) {
-                        Text(name, fontSize = 25.sp, lineHeight = 30.sp, fontWeight = FontWeight.Bold, color = c.ink)
-                        Spacer(Modifier.height(13.dp))
-                        fields.forEachIndexed { index, (label, value) ->
-                            if (index > 0) Spacer(Modifier.height(13.dp))
-                            Text(label, fontSize = 12.sp, color = c.muted)
-                            Text(value, fontSize = 16.sp, lineHeight = 21.sp, color = c.ink)
+                Column(Modifier.fillMaxWidth().statusBarsPadding().padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 26.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        RoundIconButton(Icons.AutoMirrored.Rounded.ArrowBack, "Indietro", onBack, container = Color.White.copy(alpha = 0.2f), tint = Color.White)
+                        Spacer(Modifier.weight(1f))
+                        RoundIconButton(Icons.Rounded.Edit, "Modifica", onEdit, container = Color.White.copy(alpha = 0.2f), tint = Color.White)
+                    }
+                    Spacer(Modifier.height(20.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 4.dp)) {
+                        Box(Modifier.size(78.dp).clip(RoundedCornerShape(24.dp)).background(Color.White.copy(alpha = 0.2f)).border(1.dp, Color.White.copy(alpha = 0.3f), RoundedCornerShape(24.dp)), contentAlignment = Alignment.Center) { heroIcon() }
+                        Spacer(Modifier.width(16.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(eyebrow.uppercase(), fontSize = 12.sp, letterSpacing = 1.3.sp, fontWeight = FontWeight.Bold, color = Color.White.copy(alpha = 0.8f))
+                            Text(title, fontSize = 27.sp, lineHeight = 31.sp, fontWeight = FontWeight.ExtraBold, color = Color.White, maxLines = 3)
+                            Spacer(Modifier.height(8.dp))
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { pills.forEach { (text, fg, bg) -> StatusPill(text, fg, bg) } }
                         }
                     }
                 }
-                if (key == "documents" && item.str("attachment").isNotBlank()) item {
-                    Button(onClick = onOpenAttachment, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = c.blue)) {
-                        Icon(Icons.Default.OpenInNew, null, Modifier.size(19.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text("Apri allegato")
-                    }
-                }
-                item {
-                    Button(onClick = onEdit, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = c.blue)) {
-                        Icon(Icons.Default.Edit, null, Modifier.size(19.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text("Modifica")
-                    }
+            }
+        }
+        val rows = mutableListOf<List<DetailField>>()
+        val pending = mutableListOf<DetailField>()
+        fields.forEach { field ->
+            if (field.wide) { if (pending.isNotEmpty()) { rows += pending.toList(); pending.clear() }; rows += listOf(field) }
+            else { pending += field; if (pending.size == 2) { rows += pending.toList(); pending.clear() } }
+        }
+        if (pending.isNotEmpty()) rows += pending.toList()
+        rows.forEachIndexed { index, row ->
+            item {
+                Row(Modifier.padding(horizontal = 20.dp).enterAnimation(index + 1), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    row.forEach { field -> DetailTile(field, c, Modifier.weight(1f)) }
+                    if (row.size == 1 && !row.first().wide) Spacer(Modifier.weight(1f))
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun MedicineDetailContent(item: JSONObject, store: HealthStore, c: HomeColors, modifier: Modifier, onEdit: () -> Unit) {
-    val archived = item.bool("archiviata")
-    val expired = !item.bool("senzaFine", true) && item.str("dataFine").isNotBlank() && item.str("dataFine") < today()
-    val active = !archived && !expired && (item.str("dataInizio").isBlank() || item.str("dataInizio") <= today())
-    val status = when {
-        archived -> "Archiviata"
-        expired -> "Scaduta"
-        active -> "Attiva"
-        else -> "Non iniziata"
-    }
-    val photo = item.str("photo").takeIf { it.isNotBlank() }?.let {
-        runCatching { BitmapFactory.decodeFile(store.attachmentPath(it).path) }.getOrNull()
-    }
-    val dose = "${item.str("dosaggio")} ${item.str("unita")}".trim().ifBlank { "Non specificata" }
-    val times = item.strings("orari").joinToString(", ").ifBlank {
-        if (medicineFrequencyType(item) == "as_needed") "Al bisogno" else "Non specificati"
-    }
-    val stock = "${item.str("quantita")} ${item.str("quantitaUnita").ifBlank { item.str("unita") }}"
-        .trim().ifBlank { "Non specificata" }
-
-    LazyColumn(
-        modifier.fillMaxSize().background(c.background),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 20.dp),
-        verticalArrangement = Arrangement.spacedBy(9.dp)
-    ) {
+        if (key == "documents") item {
+            AttachmentCard(item, store, c, Modifier.padding(horizontal = 20.dp).enterAnimation(rows.size + 1), onOpenAttachment)
+        }
+        if (note.isNotBlank()) item {
+            HealthCard(Modifier.padding(horizontal = 20.dp).enterAnimation(rows.size + 2)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Rounded.StickyNote2, null, Modifier.size(18.dp), tint = c.accent)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Note", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = c.accent)
+                }
+                Spacer(Modifier.height(6.dp))
+                Text(note, fontSize = 15.sp, lineHeight = 21.sp, color = s.onSurface)
+            }
+        }
         item {
-            Row(
-                Modifier.fillMaxWidth().healthSharedBounds("medicines-${item.str("id")}").clip(RoundedCornerShape(20.dp))
-                    .background(c.iconBlue)
-                    .padding(14.dp),
-                verticalAlignment = Alignment.CenterVertically
+            Button(
+                onClick = onEdit, shape = CircleShape, colors = ButtonDefaults.buttonColors(containerColor = c.accent),
+                modifier = Modifier.padding(horizontal = 20.dp).fillMaxWidth().height(56.dp).enterAnimation(rows.size + 3)
             ) {
-                Box(
-                    Modifier.size(76.dp).clip(RoundedCornerShape(18.dp)).background(c.lilac),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (photo != null) {
-                        Image(photo.asImageBitmap(), "Foto di ${item.str("nome")}", Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-                    } else CapsuleIcon(c.blue, Modifier.size(52.dp))
-                }
-                Spacer(Modifier.width(16.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(item.str("nome").ifBlank { "Terapia" }, fontSize = 27.sp, lineHeight = 31.sp,
-                        fontWeight = FontWeight.Bold, color = c.ink, maxLines = 2)
-                    Spacer(Modifier.height(10.dp))
-                    MedicineStatusChip(status, active)
-                }
-            }
-        }
-        item {
-            VisitDetailRow(Icons.Default.Medication, "Formulazione", item.str("formulazione").ifBlank { "Non specificata" },
-                Color(0xFFF1E6FF), Color(0xFF8241D4), showChevron = false,
-                customIcon = { CapsuleIcon(c.blue, Modifier.size(27.dp)) })
-        }
-        item {
-            VisitDetailRow(Icons.Default.Block, "Dose", dose,
-                Color(0xFFE5F1FF), Color(0xFF1B73C9), showChevron = false)
-        }
-        item {
-            VisitDetailRow(Icons.Default.Sync, "Frequenza", medicineFrequencyDescription(item),
-                Color(0xFFE2F8EF), Color(0xFF079765), showChevron = false)
-        }
-        item {
-            VisitDetailRow(Icons.Default.Schedule, "Orari", times,
-                Color(0xFFFFF0DF), Color(0xFFF17808))
-        }
-        item {
-            VisitDetailRow(Icons.Default.CalendarMonth, "Data di inizio",
-                item.str("dataInizio").takeIf { it.isNotBlank() }?.let(::displayDate) ?: "Non specificata",
-                Color(0xFFE5F1FF), Color(0xFF1B73C9), showChevron = false)
-        }
-        item {
-            VisitDetailRow(Icons.Default.EventBusy, "Data di fine",
-                if (item.bool("senzaFine", true)) "Senza scadenza" else item.str("dataFine").takeIf { it.isNotBlank() }?.let(::displayDate) ?: "Non specificata",
-                Color(0xFFFFE7EB), Color(0xFFD92848), showChevron = false)
-        }
-        item {
-            VisitDetailRow(Icons.Default.Inventory2, "Scorta", stock,
-                Color(0xFFFFF0DC), Color(0xFFB87608))
-        }
-        item {
-            VisitDetailRow(Icons.Default.Shield, "Stato", status,
-                Color(0xFFE1F8EC), Color(0xFF079765), showChevron = false,
-                trailing = {
-                    Switch(
-                        checked = active,
-                        onCheckedChange = { onEdit() },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = Color.White,
-                            checkedTrackColor = Color(0xFF258BEB),
-                            uncheckedThumbColor = Color.White,
-                            uncheckedTrackColor = Color(0xFFB8BEC9)
-                        )
-                    )
-                })
-        }
-        if (item.str("note").isNotBlank()) item {
-            VisitDetailRow(Icons.Default.Description, "Note", item.str("note"),
-                Color(0xFFF1E7FF), Color(0xFF6D24CA), showChevron = false)
-        }
-        item {
-            Row(
-                Modifier.fillMaxWidth().height(58.dp).clip(RoundedCornerShape(28.dp))
-                    .background(MaterialTheme.colorScheme.primary)
-                    .clickable(onClick = onEdit),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
-            ) {
-                Icon(Icons.Default.Edit, null, Modifier.size(23.dp), tint = Color.White)
-                Spacer(Modifier.width(10.dp))
-                Text("Modifica", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                Icon(Icons.Rounded.Edit, null, Modifier.size(20.dp)); Spacer(Modifier.width(10.dp)); Text("Modifica", fontSize = 16.sp, fontWeight = FontWeight.Bold)
             }
         }
     }
 }
 
 @Composable
-private fun MedicineStatusChip(label: String, active: Boolean) {
-    val tint = if (active) Color(0xFF07955F) else Color(0xFF687187)
-    val background = if (active) Color(0xFFDDF8EC) else Color(0xFFE9ECF2)
-    Row(
-        Modifier.clip(RoundedCornerShape(20.dp)).background(background).padding(horizontal = 10.dp, vertical = 5.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(Icons.Default.CheckCircle, null, Modifier.size(17.dp), tint = tint)
-        Spacer(Modifier.width(5.dp))
-        Text(label, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = tint)
+private fun DetailTile(field: DetailField, c: AreaColors, modifier: Modifier) {
+    val s = MaterialTheme.colorScheme
+    HealthCard(modifier, padding = PaddingValues(14.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconTile(field.icon, c.accent, c.container, 34.dp, 11.dp)
+            Spacer(Modifier.width(10.dp))
+            Text(field.label, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = s.onSurfaceVariant, maxLines = 1)
+        }
+        Spacer(Modifier.height(10.dp))
+        Text(field.value, fontSize = 16.sp, lineHeight = 21.sp, fontWeight = FontWeight.Bold, color = s.onSurface)
     }
 }
 
 @Composable
-private fun DocumentDetailContent(
-    item: JSONObject,
-    store: HealthStore,
-    c: HomeColors,
-    modifier: Modifier,
-    onEdit: () -> Unit,
-    onOpenAttachment: () -> Unit
-) {
-    val name = item.str("nome").ifBlank { "Documento" }
-    val category = item.str("categoria").ifBlank { "Altro" }
+private fun AttachmentCard(item: JSONObject, store: HealthStore, c: AreaColors, modifier: Modifier, onOpen: () -> Unit) {
+    val s = MaterialTheme.colorScheme
     val attachment = item.str("attachment")
     val hasAttachment = attachment.isNotBlank()
     val format = documentFormatLabel(item)
     val fileName = item.str("fileName").ifBlank { attachment.substringAfterLast('/') }
-    val linkedVisit = store.list("appointments").firstOrNull { it.str("id") == item.str("visitaId") }
-    val preview = if (hasAttachment && format == "Immagine") {
-        runCatching { BitmapFactory.decodeFile(store.attachmentPath(attachment).path) }.getOrNull()
-    } else null
-
-    LazyColumn(
-        modifier.fillMaxSize().background(c.background),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 20.dp),
-        verticalArrangement = Arrangement.spacedBy(9.dp)
-    ) {
-        item {
-            Row(
-                Modifier.fillMaxWidth().healthSharedBounds("documents-${item.str("id")}").clip(RoundedCornerShape(20.dp))
-                    .background(c.iconBlue)
-                    .padding(14.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    Modifier.size(76.dp).clip(RoundedCornerShape(18.dp)).background(c.lilac),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(Icons.Default.Description, null, Modifier.size(49.dp), tint = c.blue)
-                }
-                Spacer(Modifier.width(16.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(name, fontSize = 27.sp, lineHeight = 31.sp, fontWeight = FontWeight.Bold,
-                        color = c.ink, maxLines = 2)
-                    Spacer(Modifier.height(10.dp))
-                    Row(
-                        Modifier.clip(RoundedCornerShape(18.dp)).background(c.lilac)
-                            .padding(horizontal = 11.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(Icons.Default.Folder, null, Modifier.size(18.dp), tint = c.blue)
-                        Spacer(Modifier.width(6.dp))
-                        Text(category, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = c.blue)
-                    }
-                }
+    val preview = remember(attachment) { if (hasAttachment && format == "Immagine") runCatching { BitmapFactory.decodeFile(store.attachmentPath(attachment).path) }.getOrNull() else null }
+    val visual = documentVisual(item)
+    HealthCard(modifier, onClick = if (hasAttachment) onOpen else null, padding = PaddingValues(0.dp)) {
+        if (preview != null) Image(preview.asImageBitmap(), "Anteprima $fileName", Modifier.fillMaxWidth().height(190.dp), contentScale = ContentScale.Crop)
+        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            IconTile(visual.icon, visual.accent, visual.container, 48.dp, 16.dp)
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(if (hasAttachment) fileName.ifBlank { "Allegato" } else "Nessun allegato", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = s.onSurface, maxLines = 2)
+                Text(if (hasAttachment) "$format · tocca per aprire" else "Allega un file o una foto dal menu del documento.", fontSize = 13.sp, color = s.onSurfaceVariant)
             }
+            if (hasAttachment) Icon(Icons.Rounded.OpenInNew, null, tint = c.accent)
         }
-        item {
-            VisitDetailRow(Icons.Default.CalendarMonth, "Data",
-                item.str("data").takeIf { it.isNotBlank() }?.let(::displayDate) ?: "Non specificata",
-                Color(0xFFE5F1FF), Color(0xFF1B73C9))
-        }
-        item {
-            VisitDetailRow(Icons.Default.Description, "Formato", format,
-                Color(0xFFE2F8EC), Color(0xFF09A76D), showChevron = false)
-        }
-        item {
-            VisitDetailRow(Icons.Default.MonitorHeart, "Visita collegata",
-                linkedVisit?.str("tipo")?.ifBlank { "Visita medica" } ?: "Nessuna visita collegata",
-                Color(0xFFFFE7EF), Color(0xFFE32660), showChevron = linkedVisit != null,
-                customIcon = { StethoscopeIcon(c.blue, Modifier.size(29.dp)) })
-        }
-        item {
-            Column(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(MaterialTheme.colorScheme.surfaceContainerLow).padding(16.dp)
-            ) {
-                Text("Allegato", fontSize = 19.sp, fontWeight = FontWeight.Bold, color = c.ink)
-                Spacer(Modifier.height(13.dp))
-                Column(
-                    Modifier.fillMaxWidth().heightIn(min = 174.dp).clip(RoundedCornerShape(18.dp))
-                        .background(MaterialTheme.colorScheme.surface)
-                        .drawBehind {
-                            drawRoundRect(
-                                color = Color(0xFFC9D9ED),
-                                style = Stroke(width = 1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 8f))),
-                                cornerRadius = androidx.compose.ui.geometry.CornerRadius(18.dp.toPx())
-                            )
-                        }
-                        .then(if (hasAttachment) Modifier.clickable(onClick = onOpenAttachment) else Modifier)
-                        .padding(18.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    if (preview != null) {
-                        Image(preview.asImageBitmap(), "Anteprima $fileName",
-                            Modifier.fillMaxWidth().height(120.dp).clip(RoundedCornerShape(13.dp)), contentScale = ContentScale.Crop)
-                        Spacer(Modifier.height(12.dp))
-                    } else {
-                        Box(Modifier.size(58.dp).clip(RoundedCornerShape(20.dp)).background(Color(0xFFF0F2FA)), contentAlignment = Alignment.Center) {
-                            Icon(Icons.Default.Description, null, Modifier.size(32.dp), tint = if (hasAttachment) c.blue else c.muted)
-                        }
-                        Spacer(Modifier.height(10.dp))
-                    }
-                    Text(if (hasAttachment) fileName.ifBlank { "Allegato" } else "Nessun allegato",
-                        fontSize = 17.sp, fontWeight = FontWeight.Bold, color = c.ink, maxLines = 2)
-                    Spacer(Modifier.height(4.dp))
-                    Text(if (hasAttachment) "$format · Tocca per aprire" else "Questo documento non ha file allegati.",
-                        fontSize = 13.sp, color = c.muted)
-                }
-            }
-        }
-        if (item.str("note").isNotBlank()) item {
-            VisitDetailRow(Icons.Default.Description, "Note", item.str("note"),
-                Color(0xFFF1E7FF), Color(0xFF6D24CA), showChevron = false)
-        }
-        item {
-            Row(
-                Modifier.fillMaxWidth().height(58.dp).clip(RoundedCornerShape(28.dp))
-                    .background(MaterialTheme.colorScheme.primary)
-                    .clickable(onClick = onEdit),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
-            ) {
-                Icon(Icons.Default.Edit, null, Modifier.size(23.dp), tint = Color.White)
-                Spacer(Modifier.width(10.dp))
-                Text("Modifica", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
-            }
-        }
-    }
-}
-
-@Composable
-private fun AppointmentDetailContent(item: JSONObject, c: HomeColors, modifier: Modifier, onEdit: () -> Unit) {
-    val completed = item.bool("completata")
-    val status = if (completed) "Effettuata" else "Da effettuare"
-    val date = runCatching { LocalDate.parse(item.str("data")) }.getOrNull()
-    val doctor = item.str("medico").ifBlank {
-        listOf(item.str("medicoNome"), item.str("medicoCognome")).filter { it.isNotBlank() }.joinToString(" ")
-    }.ifBlank { "Non specificato" }
-    LazyColumn(
-        modifier.fillMaxSize().background(c.background),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 20.dp),
-        verticalArrangement = Arrangement.spacedBy(9.dp)
-    ) {
-        item {
-            Row(
-                Modifier.fillMaxWidth().healthSharedBounds("appointments-${item.str("id")}").clip(RoundedCornerShape(20.dp))
-                    .background(c.iconBlue)
-                    .padding(14.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    Modifier.size(76.dp).clip(RoundedCornerShape(18.dp)).background(c.lilac),
-                    contentAlignment = Alignment.Center
-                ) {
-                    StethoscopeIcon(c.blue, Modifier.size(50.dp))
-                }
-                Spacer(Modifier.width(14.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(item.str("tipo").ifBlank { "Visita medica" }, fontSize = 24.sp, lineHeight = 28.sp,
-                        fontWeight = FontWeight.Bold, color = c.ink, maxLines = 2)
-                    Spacer(Modifier.height(9.dp))
-                    VisitStatusChip(status, completed)
-                }
-                Spacer(Modifier.width(10.dp))
-                Column(
-                    Modifier.size(width = 79.dp, height = 78.dp).clip(RoundedCornerShape(18.dp)).background(c.lilac),
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(date?.dayOfMonth?.toString() ?: "–", fontSize = 28.sp, lineHeight = 30.sp,
-                        fontWeight = FontWeight.Bold, color = c.blue)
-                    Text(date?.format(DateTimeFormatter.ofPattern("MMM yyyy", Locale.ITALIAN)) ?: "Data assente",
-                        fontSize = 12.sp, color = c.blue)
-                }
-            }
-        }
-        item {
-            VisitDetailRow(Icons.Default.Sell, "Categoria", item.str("categoria").ifBlank { "Non specificata" },
-                Color(0xFFF1E6FF), Color(0xFF6D24CA))
-        }
-        item {
-            VisitDetailRow(Icons.Default.CalendarMonth, "Data", item.str("data").takeIf { it.isNotBlank() }?.let(::displayDate) ?: "Non specificata",
-                Color(0xFFE5F1FF), Color(0xFF1B73C9))
-        }
-        item {
-            VisitDetailRow(Icons.Default.Schedule, "Ora", item.str("ora").ifBlank { "Non specificata" },
-                Color(0xFFFFF0DF), Color(0xFFF17808))
-        }
-        item {
-            VisitDetailRow(Icons.Default.LocationOn, "Luogo", item.str("luogo").ifBlank { "Non specificato" },
-                Color(0xFFFFE7F0), Color(0xFFD91B61))
-        }
-        item {
-            VisitDetailRow(Icons.Default.Person, "Medico", doctor,
-                Color(0xFFE1F8F3), Color(0xFF0A9C86))
-        }
-        item {
-            VisitDetailRow(Icons.Default.MonitorHeart, "Stato", status,
-                Color(0xFFE5F2FF), Color(0xFF1978D2), trailing = { VisitStatusChip(status, completed) })
-        }
-        item {
-            VisitDetailRow(Icons.Default.Description, "Note", item.str("note").ifBlank { "Nessuna nota inserita" },
-                Color(0xFFF1E7FF), Color(0xFF6D24CA), mutedValue = item.str("note").isBlank())
-        }
-        item {
-            Row(
-                Modifier.fillMaxWidth().height(58.dp).clip(RoundedCornerShape(28.dp))
-                    .background(MaterialTheme.colorScheme.primary)
-                    .clickable(onClick = onEdit),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
-            ) {
-                Icon(Icons.Default.Edit, null, Modifier.size(23.dp), tint = Color.White)
-                Spacer(Modifier.width(10.dp))
-                Text("Modifica", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
-            }
-        }
-    }
-}
-
-@Composable
-private fun VisitDetailRow(
-    icon: ImageVector,
-    label: String,
-    value: String,
-    iconBackground: Color,
-    iconColor: Color,
-    mutedValue: Boolean = false,
-    showChevron: Boolean = true,
-    customIcon: (@Composable () -> Unit)? = null,
-    trailing: (@Composable () -> Unit)? = null
-) {
-    val scheme = MaterialTheme.colorScheme
-    Row(
-        Modifier.fillMaxWidth().heightIn(min = 65.dp).clip(RoundedCornerShape(18.dp))
-            .background(scheme.surfaceContainerLow).padding(horizontal = 11.dp, vertical = 9.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(Modifier.size(48.dp).clip(RoundedCornerShape(14.dp)).background(scheme.primaryContainer), contentAlignment = Alignment.Center) {
-            if (customIcon != null) customIcon() else Icon(icon, null, Modifier.size(27.dp), tint = scheme.primary)
-        }
-        Spacer(Modifier.width(13.dp))
-        Column(Modifier.weight(1f)) {
-            Text(label, fontSize = 12.sp, lineHeight = 15.sp, color = scheme.onSurfaceVariant)
-            Text(value, fontSize = 16.sp, lineHeight = 20.sp, fontWeight = if (mutedValue) FontWeight.Normal else FontWeight.SemiBold,
-                color = if (mutedValue) scheme.onSurfaceVariant else scheme.onSurface, maxLines = 2)
-        }
-        if (trailing != null) trailing()
-        else if (showChevron) Icon(Icons.Default.ChevronRight, null, Modifier.size(24.dp), tint = scheme.onSurfaceVariant)
-    }
-}
-
-@Composable
-private fun VisitStatusChip(label: String, completed: Boolean) {
-    val tint = if (completed) Color(0xFF07955F) else Color(0xFF1767C9)
-    val background = if (completed) Color(0xFFDDF8EC) else Color(0xFFE6F0FF)
-    Row(
-        Modifier.clip(RoundedCornerShape(20.dp)).background(background).padding(horizontal = 10.dp, vertical = 5.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(if (completed) Icons.Default.CheckCircle else Icons.Default.Schedule, null, Modifier.size(17.dp), tint = tint)
-        Spacer(Modifier.width(5.dp))
-        Text(label, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = tint)
     }
 }
 

@@ -35,6 +35,14 @@ fun medicineScheduledOn(med: JSONObject, date: LocalDate): Boolean {
     }
 }
 
+fun isMedicineActive(med: JSONObject): Boolean =
+    !med.bool("archiviata") &&
+        (med.bool("senzaFine", true) || med.str("dataFine").isBlank() || med.str("dataFine") >= today()) &&
+        (med.str("dataInizio").isBlank() || med.str("dataInizio") <= today())
+
+fun isMedicineExpired(med: JSONObject): Boolean =
+    !med.bool("archiviata") && !med.bool("senzaFine", true) && med.str("dataFine").isNotBlank() && med.str("dataFine") < today()
+
 fun medicineTimesOn(med: JSONObject, date: LocalDate): List<String> =
     if (medicineScheduledOn(med, date)) med.strings("orari") else emptyList()
 

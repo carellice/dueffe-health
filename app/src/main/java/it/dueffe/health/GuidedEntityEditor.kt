@@ -9,11 +9,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.AttachFile
-import androidx.compose.material.icons.filled.CalendarMonth
-import androidx.compose.material.icons.filled.PhotoCamera
-import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.rounded.*
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -31,7 +31,7 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 import java.util.UUID
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 internal fun GuidedEntityEditor(
     entityKey: String,
@@ -133,55 +133,42 @@ internal fun GuidedEntityEditor(
         onSave(data)
     }
     BackHandler { if (step > 0) { step--; error = "" } else dismiss() }
-    Scaffold(
-        topBar = { Column {
-            TopAppBar(title = { Text(if (initial.str("id").isBlank()) "Nuovo $title" else "Modifica $title") }, navigationIcon = { IconButton(onClick = { if (step > 0) { step--; error = "" } else dismiss() }) { Icon(Icons.Default.ArrowBack, "Indietro") } })
-            LinearProgressIndicator(progress = { (step + 1) / steps.size.toFloat() }, modifier = Modifier.fillMaxWidth())
-        } },
-        bottomBar = { Surface(shadowElevation = 0.dp) { Row(Modifier.fillMaxWidth().navigationBarsPadding().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            OutlinedButton(onClick = { if (step > 0) { step--; error = "" } else dismiss() }, modifier = Modifier.weight(1f)) { Text(if (step == 0) "Annulla" else "Indietro") }
-            Button(onClick = {
-                error = validateStep()
-                if (error.isBlank()) {
-                    if (step < steps.lastIndex) step++ else save()
-                }
-            }, modifier = Modifier.weight(1f)) { Text(if (step == steps.lastIndex) "Salva" else "Continua") }
-        } } }
-    ) { padding ->
-        Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            Text("${step + 1} di ${steps.size} · ${steps[step]}", style = MaterialTheme.typography.headlineSmall)
+    StepScaffold(
+        title = if (initial.str("id").isBlank()) "Nuovo $title" else "Modifica $title",
+        steps = steps, step = step, error = error,
+        onBack = { if (step > 0) { step--; error = "" } else dismiss() },
+        onNext = {
+            error = validateStep()
+            if (error.isBlank()) { if (step < steps.lastIndex) step++ else save() }
+        }
+    ) { step ->
             when (entityKey) {
                 "appointments" -> when (step) {
                     0 -> {
-                        Text("Descrivi la visita o l'esame da fare.")
+                        FormHint("Descrivi la visita o l'esame da fare.")
                         FormRadioChoice("Tipo visita *", data.str("tipo"), listOf("Visita medica", "Visita specialistica", "Controllo", "Esame del sangue", "Ecografia", "Radiografia", "Vaccinazione"), { field("tipo", it) })
                         FormRadioChoice("Categoria", data.str("categoria"), listOf("Visita", "Esame", "Controllo", "Analisi", "Altro"), { field("categoria", it) }, optional = true)
                     }
                     1 -> {
-                        Text("Seleziona data e ora. Puoi aggiungere il luogo e il medico se li conosci.")
+                        FormHint("Seleziona data e ora. Puoi aggiungere il luogo e il medico se li conosci.")
                         FormDate("Data visita *", data.str("data")) { field("data", it) }
                         FormTime("Ora visita", data.str("ora").ifBlank { "09:00" }) { field("ora", it) }
                         FormText("Luogo", data.str("luogo")) { field("luogo", it) }
                         FormText("Nome medico", data.str("medicoNome")) { field("medicoNome", it) }
                         FormText("Cognome medico", data.str("medicoCognome")) { field("medicoCognome", it) }
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Switch(data.bool("completata"), { data = JSONObject(data.toString()).put("completata", it) })
-                            Spacer(Modifier.width(8.dp))
-                            Text("Visita già effettuata")
-                        }
+                        FormSwitch("Visita già effettuata", data.bool("completata"), "Non riceverai promemoria per questa visita.") { data = JSONObject(data.toString()).put("completata", it) }
                     }
                     else -> {
                         val enabled = data.optJSONObject("promemoria")?.bool("attivo", true) ?: true
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Switch(enabled, { data = JSONObject(data.toString()).put("promemoria", (data.optJSONObject("promemoria") ?: JSONObject()).put("attivo", it)) })
-                            Spacer(Modifier.width(8.dp)); Text("Ricordami la visita")
-                        }
-                        if (enabled) {
-                            Text("Quando ricevere un avviso prima della visita?")
-                            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                (setOf(15, 60, 1440, 2880, 10080) + visitAdvances).sorted().forEach { minutes ->
-                                    val label = when (minutes) { 60 -> "1 ora"; 1440 -> "1 giorno"; 2880 -> "2 giorni"; 10080 -> "1 settimana"; else -> "$minutes min" }
-                                    FilterChip(selected = minutes in visitAdvances, onClick = { visitAdvances = if (minutes in visitAdvances) visitAdvances - minutes else visitAdvances + minutes }, label = { Text(label) })
+                        FormSwitch("Ricordami la visita", enabled, "Ricevi una notifica prima dell'appuntamento.") { data = JSONObject(data.toString()).put("promemoria", (data.optJSONObject("promemoria") ?: JSONObject()).put("attivo", it)) }
+                        AnimatedVisibility(enabled) {
+                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                FormLabel("Quanto tempo prima?")
+                                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    (setOf(15, 60, 1440, 2880, 10080) + visitAdvances).sorted().forEach { minutes ->
+                                        val label = when (minutes) { 60 -> "1 ora"; 1440 -> "1 giorno"; 2880 -> "2 giorni"; 10080 -> "1 settimana"; else -> "$minutes min" }
+                                        SelectChip(label, minutes in visitAdvances) { visitAdvances = if (minutes in visitAdvances) visitAdvances - minutes else visitAdvances + minutes }
+                                    }
                                 }
                             }
                         }
@@ -191,26 +178,26 @@ internal fun GuidedEntityEditor(
                     }
                 }
                 "bookingReminders" -> if (step == 0) {
-                    Text("Indica cosa devi prenotare e il mese in cui vorresti farlo.")
+                    FormHint("Indica cosa devi prenotare e il mese in cui vorresti farlo.")
                     FormRadioChoice("Tipo visita *", data.str("tipoVisita"), listOf("Visita medica", "Visita specialistica", "Controllo", "Esame del sangue", "Ecografia", "Radiografia"), { field("tipoVisita", it) })
                     FormMonth("Periodo desiderato", data.str("periodo")) { field("periodo", it) }
                 } else {
-                    Text("Scegli il giorno in cui vuoi ricevere il promemoria.")
+                    FormHint("Scegli il giorno in cui vuoi ricevere il promemoria.")
                     FormDate("Data promemoria", data.str("dataPromemoria")) { field("dataPromemoria", it) }
                     FormText("Note", data.str("nota")) { field("nota", it) }
                 }
                 "documents" -> if (step == 0) {
-                    Text("Dai un nome al documento e scegli la sua categoria.")
+                    FormHint("Dai un nome al documento e scegli la sua categoria.")
                     FormText("Nome documento *", data.str("nome")) { field("nome", it) }
                     FormRadioChoice("Categoria", data.str("categoria").ifBlank { "Altro" }, listOf("Analisi", "Referti", "Ricette", "Altro"), { field("categoria", it) })
                     FormDate("Data documento", data.str("data").ifBlank { today() }) { field("data", it) }
                 } else {
-                    Text("Se vuoi, collega il documento a una visita e aggiungi un allegato.")
+                    FormHint("Se vuoi, collega il documento a una visita e aggiungi un allegato.")
                     val visits = store.list("appointments")
                     if (visits.isNotEmpty()) {
                         var expanded by remember { mutableStateOf(false) }
                         ExposedDropdownMenuBox(expanded, { expanded = it }) {
-                            OutlinedTextField(visits.firstOrNull { it.str("id") == data.str("visitaId") }?.str("tipo") ?: "Nessuna visita collegata", {}, readOnly = true, label = { Text("Visita collegata") }, trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) }, modifier = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, true))
+                            OutlinedTextField(visits.firstOrNull { it.str("id") == data.str("visitaId") }?.str("tipo") ?: "Nessuna visita collegata", {}, readOnly = true, label = { Text("Visita collegata") }, trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) }, shape = RoundedCornerShape(18.dp), colors = formFieldColors(), modifier = Modifier.fillMaxWidth().menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, true))
                             ExposedDropdownMenu(expanded, { expanded = false }, shadowElevation = 0.dp) {
                                 DropdownMenuItem(text = { Text("Nessuna") }, onClick = { field("visitaId", ""); expanded = false })
                                 visits.forEach { visit -> DropdownMenuItem(text = { Text("${visit.str("tipo")} · ${displayDate(visit.str("data"))}") }, onClick = { field("visitaId", visit.str("id")); expanded = false }) }
@@ -218,40 +205,22 @@ internal fun GuidedEntityEditor(
                         }
                     }
                     FormText("Note", data.str("note")) { field("note", it) }
-                    if (data.str("attachment").isNotBlank()) {
-                        Text("Allegato pronto: ${data.str("fileName")}")
-                        TextButton(onClick = { discardStaged(); data = JSONObject(data.toString()).put("attachment", "").put("fileName", "").put("fileType", "") }) { Text("Rimuovi allegato") }
+                    FormLabel("Allegato")
+                    AnimatedVisibility(data.str("attachment").isNotBlank()) {
+                        FieldTile(Icons.Rounded.AttachFile, "Allegato pronto", data.str("fileName").ifBlank { "File" }, onClick = {}, trailing = {
+                            IconButton(onClick = { discardStaged(); data = JSONObject(data.toString()).put("attachment", "").put("fileName", "").put("fileType", "") }) { Icon(Icons.Rounded.Close, "Rimuovi allegato") }
+                        })
                     }
-                    OutlinedButton(onClick = { filePicker.launch(arrayOf("image/*", "application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document")) }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.AttachFile, null); Spacer(Modifier.width(8.dp)); Text("Scegli un file") }
-                    OutlinedButton(onClick = {
-                        val file = store.attachmentFile("draft_${UUID.randomUUID()}", "jpg")
-                        pendingCameraFile = file
-                        camera.launch(FileProvider.getUriForFile(context, "${context.packageName}.files", file))
-                    }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.PhotoCamera, null); Spacer(Modifier.width(8.dp)); Text("Scatta una foto") }
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        AttachOption(Icons.Rounded.UploadFile, "Scegli un file", Modifier.weight(1f)) { filePicker.launch(arrayOf("image/*", "application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document")) }
+                        AttachOption(Icons.Rounded.PhotoCamera, "Scatta una foto", Modifier.weight(1f)) {
+                            val file = store.attachmentFile("draft_${UUID.randomUUID()}", "jpg")
+                            pendingCameraFile = file
+                            camera.launch(FileProvider.getUriForFile(context, "${context.packageName}.files", file))
+                        }
+                    }
                 }
             }
-            if (error.isNotBlank()) Text(error, color = MaterialTheme.colorScheme.error)
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun FormTime(label: String, value: String, onChange: (String) -> Unit) {
-    var open by remember { mutableStateOf(false) }
-    OutlinedButton(onClick = { open = !open }, modifier = Modifier.fillMaxWidth()) {
-        Icon(Icons.Default.Schedule, null); Spacer(Modifier.width(8.dp)); Text("$label: ${value.ifBlank { "Seleziona orario" }}")
-    }
-    if (open) {
-        val initial = runCatching { LocalTime.parse(value) }.getOrDefault(LocalTime.of(9, 0))
-        val picker = rememberTimePickerState(initialHour = initial.hour, initialMinute = initial.minute, is24Hour = true)
-        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-            TimePicker(state = picker)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TextButton(onClick = { open = false }) { Text("Annulla") }
-                Button(onClick = { onChange(String.format(Locale.ITALY, "%02d:%02d", picker.hour, picker.minute)); open = false }) { Text("Conferma") }
-            }
-        }
     }
 }
 
@@ -261,12 +230,24 @@ private fun FormMonth(label: String, value: String, onChange: (String) -> Unit) 
     val parts = value.split("-")
     val year = parts.firstOrNull()?.takeIf { it.matches(Regex("\\d{1,4}")) } ?: LocalDate.now().year.toString()
     val month = parts.getOrNull(1)?.toIntOrNull()
-    Text(label, style = MaterialTheme.typography.titleMedium)
+    FormLabel(label)
     FormChoice("Mese", month?.let { months.getOrNull(it - 1) } ?: "", months) { selected ->
         val number = months.indexOf(selected) + 1
         onChange(if (number > 0) "$year-${number.toString().padStart(2, '0')}" else "")
     }
     FormText("Anno", year, KeyboardType.Number) { typed ->
         if (typed.all(Char::isDigit) && typed.length <= 4) onChange(if (month != null) "$typed-${month.toString().padStart(2, '0')}" else typed)
+    }
+}
+
+@Composable
+private fun AttachOption(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, modifier: Modifier, onClick: () -> Unit) {
+    val c = areaColors(Area.Document)
+    HealthCard(modifier, onClick = onClick, padding = PaddingValues(vertical = 18.dp, horizontal = 12.dp)) {
+        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+            IconTile(icon, c.accent, c.container, 48.dp, 16.dp)
+            Spacer(Modifier.height(8.dp))
+            Text(label, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+        }
     }
 }

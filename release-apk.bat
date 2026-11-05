@@ -12,7 +12,7 @@ set "KEYTOOL=keytool"
 if defined JAVA_HOME set "KEYTOOL=%JAVA_HOME%\bin\keytool"
 
 set "REPO=%RELEASE_REPO%"
-if not defined REPO set "REPO=carellice/android-app-releases"
+if not defined REPO set "REPO=carellice/dueffe-health"
 echo %REPO%| findstr /r "^[A-Za-z0-9_.-][A-Za-z0-9_.-]*/[A-Za-z0-9_.-][A-Za-z0-9_.-]*$" >nul || (call :fail "RELEASE_REPO deve essere owner/repo" & exit /b 1)
 where gh >nul 2>&1 || (call :fail "Installa GitHub CLI: gh" & exit /b 1)
 "%KEYTOOL%" -help >nul 2>&1 || (call :fail "keytool non disponibile: installa un JDK o imposta JAVA_HOME" & exit /b 1)

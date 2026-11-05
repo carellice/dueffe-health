@@ -6,7 +6,7 @@ close_terminal_on_success() {
     osascript -e 'tell application "Terminal" to close (front window)' >/dev/null 2>&1 || true
   fi
 }
-REPO="${RELEASE_REPO:-carellice/android-app-releases}"
+REPO="${RELEASE_REPO:-carellice/dueffe-health}"
 [[ "$REPO" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || { echo "RELEASE_REPO deve essere owner/repo" >&2; exit 1; }
 command -v gh >/dev/null || { echo "Installa GitHub CLI: gh" >&2; exit 1; }
 command -v keytool >/dev/null || { echo "keytool non disponibile: installa un JDK" >&2; exit 1; }

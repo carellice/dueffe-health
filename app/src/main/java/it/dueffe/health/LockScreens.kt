@@ -111,7 +111,7 @@ internal fun WelcomeScreen(name: String, onNameChange: (String) -> Unit, onDismi
     val float by transition.animateFloat(-6f, 6f, infiniteRepeatable(tween(2200, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "Fluttuazione logo")
     val appear = remember { Animatable(0f) }
     LaunchedEffect(Unit) { appear.animateTo(1f, spring(dampingRatio = 0.55f, stiffness = 120f)) }
-    Column(Modifier.fillMaxSize().background(s.background).verticalScroll(rememberScrollState())) {
+    Column(Modifier.fillMaxSize().starry().verticalScroll(rememberScrollState())) {
         HeroSurface(Modifier.fillMaxWidth(), shape = RoundedCornerShape(bottomStart = 44.dp, bottomEnd = 44.dp)) {
             Column(Modifier.fillMaxWidth().statusBarsPadding().padding(start = 28.dp, end = 28.dp, top = 36.dp, bottom = 40.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Box(

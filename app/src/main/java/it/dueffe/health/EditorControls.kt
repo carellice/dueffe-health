@@ -54,9 +54,10 @@ internal fun StepScaffold(
     val s = MaterialTheme.colorScheme
     val last = step >= steps.lastIndex
     Scaffold(
-        containerColor = s.background,
+        modifier = Modifier.starry(),
+        containerColor = Color.Transparent,
         topBar = {
-            Column(Modifier.fillMaxWidth().background(s.background).statusBarsPadding().padding(start = 8.dp, end = 20.dp, top = 4.dp, bottom = 8.dp)) {
+            Column(Modifier.fillMaxWidth().background(s.background.copy(alpha = 0.92f)).statusBarsPadding().padding(start = 8.dp, end = 20.dp, top = 4.dp, bottom = 8.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = onBack) { Icon(if (step == 0) Icons.Rounded.Close else Icons.AutoMirrored.Rounded.ArrowBack, if (step == 0) "Chiudi" else "Indietro") }
                     Text(title, Modifier.weight(1f), fontSize = 18.sp, fontWeight = FontWeight.Bold, color = s.onBackground)
@@ -75,7 +76,7 @@ internal fun StepScaffold(
         },
         bottomBar = {
             Row(
-                Modifier.fillMaxWidth().background(s.background).navigationBarsPadding().imePadding().padding(horizontal = 20.dp, vertical = 12.dp),
+                Modifier.fillMaxWidth().background(s.background.copy(alpha = 0.92f)).navigationBarsPadding().imePadding().padding(horizontal = 20.dp, vertical = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 AnimatedVisibility(step > 0) {
@@ -124,16 +125,17 @@ internal fun FormScaffold(
 ) {
     val s = MaterialTheme.colorScheme
     Scaffold(
-        containerColor = s.background,
+        modifier = Modifier.starry(),
+        containerColor = Color.Transparent,
         topBar = {
-            Row(Modifier.fillMaxWidth().background(s.background).statusBarsPadding().padding(start = 16.dp, end = 20.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().background(s.background.copy(alpha = 0.92f)).statusBarsPadding().padding(start = 16.dp, end = 20.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 RoundIconButton(Icons.AutoMirrored.Rounded.ArrowBack, "Indietro", onBack)
                 Spacer(Modifier.width(14.dp))
                 Text(title, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = s.onBackground)
             }
         },
         bottomBar = {
-            if (primaryLabel != null) Box(Modifier.fillMaxWidth().background(s.background).navigationBarsPadding().imePadding().padding(horizontal = 20.dp, vertical = 12.dp)) {
+            if (primaryLabel != null) Box(Modifier.fillMaxWidth().background(s.background.copy(alpha = 0.92f)).navigationBarsPadding().imePadding().padding(horizontal = 20.dp, vertical = 12.dp)) {
                 Button(onClick = onPrimary, modifier = Modifier.fillMaxWidth().height(56.dp), shape = CircleShape) {
                     Icon(Icons.Rounded.Check, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text(primaryLabel, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 }

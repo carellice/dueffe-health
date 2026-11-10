@@ -28,6 +28,7 @@ import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -386,7 +387,9 @@ fun HealthApp() {
                                 if (fab != null) lastFab = fab
                                 val fabExpanded = listStates.getValue(tab).firstVisibleItemIndex < 2
                                 Scaffold(
-                                    containerColor = scheme.background,
+                                    // Lo sfondo con le stelle, come Dueffe Home e Chiarella.
+                                    modifier = Modifier.starry(),
+                                    containerColor = Color.Transparent,
                                     bottomBar = {
                                         FloatingNavBar(HealthTab.entries.map { NavItem(it.label, it.icon, badge = it == HealthTab.Oggi && overdue) }, tab.ordinal) { selectTab(HealthTab.entries[it]) }
                                     },

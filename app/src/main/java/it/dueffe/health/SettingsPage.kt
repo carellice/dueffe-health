@@ -45,7 +45,7 @@ fun SettingsPage(
     val dynamicAvailable = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
 
     LazyColumn(
-        Modifier.fillMaxSize().background(s.background),
+        Modifier.fillMaxSize().starry(),
         contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 40.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {

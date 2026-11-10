@@ -40,7 +40,7 @@ fun EntityDetailPage(
     val area = when (key) { "medicines" -> Area.Therapy; "documents" -> Area.Document; else -> Area.Visit }
     val c = areaColors(area)
     if (item == null) {
-        Column(Modifier.fillMaxSize().background(s.background).statusBarsPadding().padding(20.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+        Column(Modifier.fillMaxSize().starry().statusBarsPadding().padding(20.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
             RoundIconButton(Icons.AutoMirrored.Rounded.ArrowBack, "Indietro", onBack)
             EmptyState(Icons.Rounded.SearchOff, "Elemento non disponibile", "Potrebbe essere stato eliminato.")
         }
@@ -123,7 +123,7 @@ fun EntityDetailPage(
         }
     }
 
-    LazyColumn(Modifier.fillMaxSize().background(s.background), contentPadding = PaddingValues(bottom = 40.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    LazyColumn(Modifier.fillMaxSize().starry(), contentPadding = PaddingValues(bottom = 40.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         item {
             HeroSurface(
                 Modifier.fillMaxWidth().healthSharedBounds("$key-${item.str("id")}"),

@@ -53,6 +53,15 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.sin
+import kotlin.random.Random
 
 /** Ogni area dell'app ha un accento fisso, così il colore aiuta a orientarsi. */
 internal enum class Area { Therapy, Visit, Document }
@@ -384,4 +393,46 @@ internal fun StethoscopeIcon(color: Color, modifier: Modifier = Modifier, hole: 
         drawCircle(color, size.width * 0.11f, Offset(size.width * 0.78f, size.height * 0.77f))
         drawCircle(hole, size.width * 0.035f, Offset(size.width * 0.78f, size.height * 0.77f))
     }
+}
+
+/**
+ * Lo sfondo delle pagine, come in Dueffe Home e Chiarella: il colore del tema con tre bagliori che
+ * derivano lentamente e un cielo di stelle che brillano. Resta opaco, così le transizioni tra pagine
+ * non si sovrappongono. Al posto di background(colorScheme.background).
+ */
+internal fun Modifier.starry(): Modifier = composed {
+    val s = MaterialTheme.colorScheme
+    val dark = s.background.luminance() < 0.5f
+    val transition = rememberInfiniteTransition(label = "Cielo")
+    val t by transition.animateFloat(0f, (2 * PI).toFloat(), infiniteRepeatable(tween(36_000, easing = LinearEasing)), label = "Deriva")
+    val twinkle by transition.animateFloat(0f, (2 * PI).toFloat(), infiniteRepeatable(tween(6_000, easing = LinearEasing)), label = "Stelle")
+    val stars = remember {
+        val r = Random(7)
+        List(55) { StarDot(r.nextFloat(), r.nextFloat(), 0.5f + r.nextFloat() * 1.3f, r.nextFloat() * 6.28f) }
+    }
+    val glow = if (dark) 0.30f else 0.16f
+    val starColor = if (dark) Color.White else s.primary
+    drawBehind {
+        drawRect(s.background)
+        val w = size.width
+        val h = size.height
+        glowAt(s.primary, Offset(w * (0.2f + 0.15f * cos(t)), h * (0.12f + 0.05f * sin(t * 2))), w * 0.9f, glow)
+        glowAt(s.secondary, Offset(w * (0.88f + 0.1f * sin(t + 1f)), h * (0.45f + 0.06f * cos(t))), w * 0.75f, glow * 0.8f)
+        glowAt(s.tertiary, Offset(w * (0.35f + 0.2f * sin(t + 2.5f)), h * (0.92f + 0.04f * cos(t * 2))), w * 0.95f, glow * 0.7f)
+        stars.forEach { st ->
+            val a = 0.25f + 0.55f * ((sin(twinkle * st.speed + st.phase) + 1f) / 2f)
+            drawCircle(starColor.copy(alpha = a * if (dark) 0.75f else 0.35f), st.size * density, Offset(st.x * w, st.y * h))
+        }
+    }
+}
+
+private class StarDot(val x: Float, val y: Float, val size: Float, val phase: Float) {
+    val speed = 0.6f + (phase % 1f)
+}
+
+private fun DrawScope.glowAt(color: Color, center: Offset, radius: Float, alpha: Float) {
+    drawCircle(
+        Brush.radialGradient(0f to color.copy(alpha = alpha), 0.45f to color.copy(alpha = alpha * 0.45f), 1f to Color.Transparent, center = center, radius = radius),
+        radius, center,
+    )
 }

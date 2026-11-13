@@ -105,7 +105,7 @@ fun HomeDashboard(
         if (lowStock.isNotEmpty()) item {
             HealthCard(Modifier.enterAnimation(2), onClick = { onTab(HealthTab.Terapie, "Attivi") }, color = HealthStatus.warningContainer, padding = PaddingValues(14.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconTile(Icons.Rounded.Inventory2, HealthStatus.warning, Color.White.copy(alpha = 0.7f), 42.dp, 14.dp)
+                    IconTile(Icons.Rounded.Inventory2, HealthStatus.warning, HealthStatus.warning.copy(alpha = 0.16f), 42.dp, 14.dp)
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
                         Text("Scorte in esaurimento", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = HealthStatus.warning)
@@ -117,16 +117,15 @@ fun HomeDashboard(
         }
         item {
             Column(Modifier.enterAnimation(3), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                val therapy = areaColors(Area.Therapy)
-                val visit = areaColors(Area.Visit)
-                val document = areaColors(Area.Document)
+                val s = MaterialTheme.colorScheme
+                val overdue = doses.any { !isTaken(it) && doseOverdue(it.second, false, now) }
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    StatTile(Icons.Rounded.Medication, meds.size, "Terapie attive", therapy, Modifier.weight(1f)) { onTab(HealthTab.Terapie, "Attivi") }
-                    StatTile(Icons.Rounded.EventAvailable, visits.size, "Visite in programma", visit, Modifier.weight(1f)) { onTab(HealthTab.Visite, "Prossime") }
+                    AreaHubTile("Terapie", if (overdue) "Dosi in ritardo" else "Farmaci attivi", Icons.Rounded.Medication, s.primary, meds.size, Modifier.weight(1f), badge = overdue) { onTab(HealthTab.Terapie, null) }
+                    AreaHubTile("Visite", if (bookings > 0) "$bookings da prenotare" else "In programma", Icons.Rounded.CalendarMonth, s.secondary, visits.size, Modifier.weight(1f), badge = bookings > 0) { onTab(HealthTab.Visite, null) }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    StatTile(Icons.Rounded.NotificationsActive, bookings, "Da prenotare", visit, Modifier.weight(1f)) { onTab(HealthTab.Visite, "Da prenotare") }
-                    StatTile(Icons.Rounded.FolderOpen, documents, "Documenti", document, Modifier.weight(1f)) { onTab(HealthTab.Documenti, null) }
+                    AreaHubTile("Documenti", "Referti e ricette", Icons.Rounded.FolderOpen, s.tertiary, documents, Modifier.weight(1f)) { onTab(HealthTab.Documenti, null) }
+                    AreaHubTile("Profilo", "Scheda sanitaria", Icons.Rounded.Person, lerp(s.primary, s.secondary, 0.5f), null, Modifier.weight(1f)) { onTab(HealthTab.Profilo, null) }
                 }
             }
         }

@@ -8,6 +8,9 @@ import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.dynamicLightColorScheme
+import androidx.compose.material3.dynamicDarkColorScheme
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
@@ -69,6 +72,37 @@ internal fun healthColorScheme(id: String): ColorScheme {
     )
 }
 
+/** Variante scura "premium": nero bluastro profondo, superfici a strati e accenti luminosi. */
+internal fun healthDarkColorScheme(id: String): ColorScheme {
+    val p = healthPalette(id)
+    fun glow(c: Color) = lerp(c, Color.White, 0.28f)
+    val base = lerp(Color(0xFF07080D), p.primary, 0.04f)
+    fun layer(amount: Float) = lerp(base, lerp(Color(0xFF2A2F3D), p.primary, 0.12f), amount)
+    return darkColorScheme(
+        primary = glow(p.primary), onPrimary = Color(0xFF0B0C12),
+        primaryContainer = lerp(base, p.primary, 0.26f), onPrimaryContainer = lerp(p.primary, Color.White, 0.75f),
+        inversePrimary = p.primary,
+        secondary = glow(p.secondary), onSecondary = Color(0xFF0B0C12),
+        secondaryContainer = lerp(base, p.secondary, 0.26f), onSecondaryContainer = lerp(p.secondary, Color.White, 0.75f),
+        tertiary = glow(p.tertiary), onTertiary = Color(0xFF0B0C12),
+        tertiaryContainer = lerp(base, p.tertiary, 0.26f), onTertiaryContainer = lerp(p.tertiary, Color.White, 0.75f),
+        background = base, onBackground = Color(0xFFF1F2F7),
+        surface = base, onSurface = Color(0xFFF1F2F7),
+        surfaceVariant = layer(0.35f), onSurfaceVariant = Color(0xFFA3A8B8),
+        surfaceTint = p.primary,
+        surfaceBright = layer(0.6f), surfaceDim = base,
+        surfaceContainerLowest = layer(0.22f),
+        surfaceContainerLow = layer(0.16f),
+        surfaceContainer = layer(0.3f),
+        surfaceContainerHigh = layer(0.42f),
+        surfaceContainerHighest = layer(0.55f),
+        outline = Color(0xFF6C7182),
+        outlineVariant = Color(0xFF2B2F3B),
+        error = Color(0xFFFF6B81), onError = Color(0xFF2A0008),
+        errorContainer = Color(0xFF4A1420), onErrorContainer = Color(0xFFFFD9DF)
+    )
+}
+
 private val healthShapes = Shapes(
     extraSmall = RoundedCornerShape(10.dp),
     small = RoundedCornerShape(14.dp),
@@ -88,7 +122,8 @@ private fun ColorScheme.animated(): ColorScheme = copy(
     secondary = themeColor(secondary), secondaryContainer = themeColor(secondaryContainer), onSecondaryContainer = themeColor(onSecondaryContainer),
     tertiary = themeColor(tertiary), tertiaryContainer = themeColor(tertiaryContainer), onTertiaryContainer = themeColor(onTertiaryContainer),
     background = themeColor(background), surface = themeColor(surface),
-    onSurfaceVariant = themeColor(onSurfaceVariant),
+    onBackground = themeColor(onBackground), onSurface = themeColor(onSurface), onSurfaceVariant = themeColor(onSurfaceVariant),
+    surfaceContainerLowest = themeColor(surfaceContainerLowest), outline = themeColor(outline),
     surfaceContainerLow = themeColor(surfaceContainerLow), surfaceContainer = themeColor(surfaceContainer),
     surfaceContainerHigh = themeColor(surfaceContainerHigh), outlineVariant = themeColor(outlineVariant)
 )
@@ -96,7 +131,11 @@ private fun ColorScheme.animated(): ColorScheme = copy(
 @Composable
 internal fun HealthTheme(paletteId: String, dynamicColor: Boolean, content: @Composable () -> Unit) {
     val context = LocalContext.current
-    val scheme = if (dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) dynamicLightColorScheme(context)
-    else healthColorScheme(paletteId)
+    val dark = isSystemInDarkTheme()
+    val scheme = when {
+        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+        dark -> healthDarkColorScheme(paletteId)
+        else -> healthColorScheme(paletteId)
+    }
     MaterialTheme(colorScheme = scheme.animated(), shapes = healthShapes, content = content)
 }

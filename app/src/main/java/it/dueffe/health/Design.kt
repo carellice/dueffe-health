@@ -27,6 +27,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -78,16 +79,21 @@ internal fun areaColors(area: Area): AreaColors {
     }
 }
 
+/** Colori di stato: nel tema scuro diventano luminosi su contenitori traslucidi. */
 internal object HealthStatus {
-    val success = Color(0xFF128A5C)
-    val successContainer = Color(0xFFDDF5E9)
-    val warning = Color(0xFFB4530A)
-    val warningContainer = Color(0xFFFFEDD6)
+    private val dark @Composable get() = isDarkTheme
+    val success: Color @Composable get() = if (dark) Color(0xFF3DDC97) else Color(0xFF128A5C)
+    val successContainer: Color @Composable get() = if (dark) Color(0xFF3DDC97).copy(alpha = 0.15f) else Color(0xFFDDF5E9)
+    val warning: Color @Composable get() = if (dark) Color(0xFFFFB454) else Color(0xFFB4530A)
+    val warningContainer: Color @Composable get() = if (dark) Color(0xFFFFB454).copy(alpha = 0.15f) else Color(0xFFFFEDD6)
 }
+
+internal val isDarkTheme: Boolean @Composable get() = MaterialTheme.colorScheme.background.luminance() < 0.5f
 
 @Composable
 internal fun heroBrush(start: Color = MaterialTheme.colorScheme.primary, end: Color = MaterialTheme.colorScheme.secondary): Brush =
-    Brush.linearGradient(listOf(start, lerp(start, end, 0.7f)))
+    if (isDarkTheme) Brush.linearGradient(listOf(lerp(start, Color.Black, 0.35f), lerp(lerp(start, end, 0.7f), Color.Black, 0.55f)))
+    else Brush.linearGradient(listOf(start, lerp(start, end, 0.7f)))
 
 /** Superficie con gradiente e bolle luminose che si muovono lentamente. */
 @Composable
@@ -126,13 +132,18 @@ internal fun HealthCard(
     val s = MaterialTheme.colorScheme
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
-    val scale by animateFloatAsState(if (pressed && onClick != null) 0.97f else 1f, spring(dampingRatio = 0.6f, stiffness = 520f), label = "Pressione card")
+    val dark = isDarkTheme
+    val scale by animateFloatAsState(if (pressed && onClick != null) 0.965f else 1f, spring(dampingRatio = 0.55f, stiffness = 520f), label = "Pressione card")
+    val rim = if (dark) Brush.linearGradient(listOf(Color.White.copy(alpha = 0.14f), Color.White.copy(alpha = 0.03f), s.primary.copy(alpha = 0.18f)))
+        else Brush.linearGradient(listOf(s.outlineVariant.copy(alpha = 0.6f), s.outlineVariant.copy(alpha = 0.3f)))
+    val fill = if (dark && color == s.surfaceContainerLowest) Brush.verticalGradient(listOf(s.surfaceContainerHigh.copy(alpha = 0.8f), s.surfaceContainerLowest.copy(alpha = 0.9f)))
+        else Brush.linearGradient(listOf(color, color))
     Column(
         modifier.graphicsLayer { scaleX = scale; scaleY = scale }
             .fillMaxWidth()
-            .shadow(6.dp, shape, ambientColor = s.primary.copy(alpha = 0.06f), spotColor = s.primary.copy(alpha = 0.14f))
-            .clip(shape).background(color)
-            .border(1.dp, s.outlineVariant.copy(alpha = 0.45f), shape)
+            .shadow(if (dark) 0.dp else 10.dp, shape, ambientColor = s.primary.copy(alpha = 0.05f), spotColor = s.primary.copy(alpha = 0.12f))
+            .clip(shape).background(fill)
+            .border(1.dp, rim, shape)
             .then(if (onClick != null) Modifier.clickable(interaction, ripple(), onClick = onClick) else Modifier)
             .padding(padding),
         content = content
@@ -169,13 +180,21 @@ internal fun ProfileAvatar(name: String, size: Dp = 44.dp, onClick: (() -> Unit)
 }
 
 @Composable
-internal fun PageHeader(eyebrow: String, title: String, modifier: Modifier = Modifier, trailing: @Composable RowScope.() -> Unit = {}) {
+internal fun PageHeader(eyebrow: String, title: String, modifier: Modifier = Modifier, onBack: (() -> Unit)? = null, accent: Color = MaterialTheme.colorScheme.primary, trailing: @Composable RowScope.() -> Unit = {}) {
     val s = MaterialTheme.colorScheme
-    Row(modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (onBack != null) {
+            RoundIconButton(Icons.AutoMirrored.Rounded.ArrowBack, "Indietro", onBack, tint = s.onSurface)
+            Spacer(Modifier.width(14.dp))
+        }
         Column(Modifier.weight(1f)) {
-            Text(eyebrow.uppercase(), fontSize = 12.sp, letterSpacing = 1.4.sp, fontWeight = FontWeight.Bold, color = s.primary, maxLines = 1)
-            Spacer(Modifier.height(2.dp))
-            Text(title, fontSize = 30.sp, lineHeight = 35.sp, fontWeight = FontWeight.ExtraBold, color = s.onBackground, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(6.dp).clip(CircleShape).background(accent))
+                Spacer(Modifier.width(7.dp))
+                Text(eyebrow.uppercase(), fontSize = 11.sp, letterSpacing = 2.sp, fontWeight = FontWeight.SemiBold, color = s.onSurfaceVariant, maxLines = 1)
+            }
+            Spacer(Modifier.height(3.dp))
+            Text(title, fontSize = if (onBack != null) 28.sp else 32.sp, lineHeight = 36.sp, fontWeight = FontWeight.Black, letterSpacing = (-0.6).sp, color = s.onBackground, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
         Spacer(Modifier.width(10.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically, content = trailing)
@@ -185,9 +204,12 @@ internal fun PageHeader(eyebrow: String, title: String, modifier: Modifier = Mod
 @Composable
 internal fun RoundIconButton(icon: ImageVector, description: String, onClick: () -> Unit, size: Dp = 44.dp, container: Color = MaterialTheme.colorScheme.surfaceContainerLowest, tint: Color = MaterialTheme.colorScheme.onSurface) {
     val s = MaterialTheme.colorScheme
+    val dark = isDarkTheme
     Box(
-        Modifier.size(size).shadow(4.dp, CircleShape, spotColor = s.primary.copy(alpha = 0.18f)).clip(CircleShape)
-            .background(container).clickable(onClickLabel = description, onClick = onClick),
+        Modifier.size(size).shadow(if (dark) 0.dp else 4.dp, CircleShape, spotColor = s.primary.copy(alpha = 0.18f)).clip(CircleShape)
+            .background(if (dark && container == s.surfaceContainerLowest) s.surfaceContainerHigh else container)
+            .border(1.dp, if (dark) Color.White.copy(alpha = 0.08f) else Color.Transparent, CircleShape)
+            .clickable(onClickLabel = description, onClick = onClick),
         contentAlignment = Alignment.Center
     ) { Icon(icon, description, Modifier.size(size * 0.5f), tint = tint) }
 }
@@ -196,7 +218,7 @@ internal fun RoundIconButton(icon: ImageVector, description: String, onClick: ()
 internal fun SectionHeader(title: String, modifier: Modifier = Modifier, action: String? = null, onAction: () -> Unit = {}) {
     val s = MaterialTheme.colorScheme
     Row(modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(title, Modifier.weight(1f), fontSize = 19.sp, fontWeight = FontWeight.Bold, color = s.onBackground)
+        Text(title, Modifier.weight(1f), fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.3).sp, color = s.onBackground)
         if (action != null) Row(
             Modifier.clip(CircleShape).clickable(onClick = onAction).padding(start = 10.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -410,18 +432,19 @@ internal fun Modifier.starry(): Modifier = composed {
         val r = Random(7)
         List(55) { StarDot(r.nextFloat(), r.nextFloat(), 0.5f + r.nextFloat() * 1.3f, r.nextFloat() * 6.28f) }
     }
-    val glow = if (dark) 0.30f else 0.16f
+    // Premium: aurora morbida in alto, luce calda in basso, poche particelle discrete.
+    val glow = if (dark) 0.34f else 0.14f
     val starColor = if (dark) Color.White else s.primary
     drawBehind {
         drawRect(s.background)
         val w = size.width
         val h = size.height
-        glowAt(s.primary, Offset(w * (0.2f + 0.15f * cos(t)), h * (0.12f + 0.05f * sin(t * 2))), w * 0.9f, glow)
-        glowAt(s.secondary, Offset(w * (0.88f + 0.1f * sin(t + 1f)), h * (0.45f + 0.06f * cos(t))), w * 0.75f, glow * 0.8f)
-        glowAt(s.tertiary, Offset(w * (0.35f + 0.2f * sin(t + 2.5f)), h * (0.92f + 0.04f * cos(t * 2))), w * 0.95f, glow * 0.7f)
-        stars.forEach { st ->
-            val a = 0.25f + 0.55f * ((sin(twinkle * st.speed + st.phase) + 1f) / 2f)
-            drawCircle(starColor.copy(alpha = a * if (dark) 0.75f else 0.35f), st.size * density, Offset(st.x * w, st.y * h))
+        glowAt(s.primary, Offset(w * (0.15f + 0.12f * cos(t)), h * (0.02f + 0.04f * sin(t * 2))), w * 1.05f, glow)
+        glowAt(s.secondary, Offset(w * (0.95f + 0.06f * sin(t + 1f)), h * (0.18f + 0.05f * cos(t))), w * 0.8f, glow * 0.7f)
+        glowAt(s.tertiary, Offset(w * (0.5f + 0.25f * sin(t + 2.5f)), h * (1.05f + 0.03f * cos(t * 2))), w * 0.9f, glow * 0.45f)
+        stars.take(28).forEach { st ->
+            val a = 0.2f + 0.5f * ((sin(twinkle * st.speed + st.phase) + 1f) / 2f)
+            drawCircle(starColor.copy(alpha = a * if (dark) 0.5f else 0.22f), st.size * 0.8f * density, Offset(st.x * w, st.y * h * 0.6f))
         }
     }
 }
@@ -435,4 +458,50 @@ private fun DrawScope.glowAt(color: Color, center: Offset, radius: Float, alpha:
         Brush.radialGradient(0f to color.copy(alpha = alpha), 0.45f to color.copy(alpha = alpha * 0.45f), 1f to Color.Transparent, center = center, radius = radius),
         radius, center,
     )
+}
+
+/** Tessera grande della home: porta a un'area con gradiente, icona e conteggio animato. */
+@Composable
+internal fun AreaHubTile(
+    title: String, subtitle: String, icon: ImageVector, accent: Color, count: Int?, modifier: Modifier = Modifier,
+    badge: Boolean = false, onClick: () -> Unit
+) {
+    val s = MaterialTheme.colorScheme
+    val dark = isDarkTheme
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (pressed) 0.95f else 1f, spring(dampingRatio = 0.5f, stiffness = 480f), label = "Pressione $title")
+    val shape = RoundedCornerShape(28.dp)
+    val transition = rememberInfiniteTransition(label = "Luce $title")
+    val drift by transition.animateFloat(0f, 1f, infiniteRepeatable(tween(5200, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "Riflesso")
+    val fill = if (dark) Brush.linearGradient(listOf(lerp(s.surfaceContainerHigh, accent, 0.30f), lerp(s.surfaceContainerLowest, accent, 0.06f)))
+        else Brush.linearGradient(listOf(accent, lerp(accent, Color.Black, 0.22f)))
+    val shine = if (dark) accent.copy(alpha = 0.45f) else Color.White.copy(alpha = 0.22f)
+    Box(
+        modifier.graphicsLayer { scaleX = scale; scaleY = scale }
+            .height(150.dp)
+            .shadow(if (dark) 0.dp else 14.dp, shape, ambientColor = accent.copy(alpha = 0.2f), spotColor = accent.copy(alpha = 0.35f))
+            .clip(shape).background(fill)
+            .border(1.dp, Brush.linearGradient(listOf(Color.White.copy(alpha = if (dark) 0.18f else 0.35f), Color.Transparent)), shape)
+            .drawBehind {
+                val c = Offset(size.width * (0.9f - 0.15f * drift), size.height * (0.1f + 0.1f * drift))
+                val r = size.width * 0.7f
+                drawCircle(Brush.radialGradient(listOf(shine, Color.Transparent), center = c, radius = r), r, c)
+            }
+            .clickable(interaction, ripple(color = Color.White), onClickLabel = "Apri $title", onClick = onClick)
+            .padding(16.dp)
+    ) {
+        val fg = if (dark) s.onSurface else Color.White
+        Box(Modifier.size(44.dp).clip(RoundedCornerShape(15.dp)).background(if (dark) accent.copy(alpha = 0.22f) else Color.White.copy(alpha = 0.22f)), contentAlignment = Alignment.Center) {
+            Icon(icon, null, Modifier.size(24.dp), tint = if (dark) accent else Color.White)
+        }
+        if (badge) Box(Modifier.offset(x = 36.dp, y = (-3).dp).size(12.dp).clip(CircleShape).background(s.error).border(2.dp, fg, CircleShape))
+        if (count != null) androidx.compose.animation.AnimatedContent(count, Modifier.align(Alignment.TopEnd), label = "Conteggio $title") { value ->
+            Text("$value", fontSize = 30.sp, lineHeight = 32.sp, fontWeight = FontWeight.Black, color = fg)
+        }
+        Column(Modifier.align(Alignment.BottomStart)) {
+            Text(title, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.2).sp, color = fg, maxLines = 1)
+            Text(subtitle, fontSize = 12.sp, color = fg.copy(alpha = 0.72f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
 }

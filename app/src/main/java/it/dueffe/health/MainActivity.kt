@@ -66,7 +66,7 @@ internal fun selectedPhoneContact(context: android.content.Context, uri: android
     }
 }.getOrNull()
 
-/** Le cinque aree principali, sempre raggiungibili dalla barra in basso. */
+/** Le aree dell'app: Oggi è la home, le altre si aprono dalle tessere della home. */
 enum class HealthTab(val label: String, val icon: ImageVector) {
     Oggi("Oggi", Icons.Rounded.Home),
     Terapie("Terapie", Icons.Rounded.Medication),
@@ -83,12 +83,13 @@ private sealed interface Screen {
     data object Locked : Screen { override val depth = -1 }
     data object Welcome : Screen { override val depth = -1 }
     data object Tabs : Screen { override val depth = 0 }
-    data class Detail(val key: String, val id: String) : Screen { override val depth = 1 }
-    data object Settings : Screen { override val depth = 1 }
-    data object Profiles : Screen { override val depth = 2 }
-    data class Contact(val type: String, val index: Int, val item: JSONObject) : Screen { override val depth = 3 }
-    data object Pin : Screen { override val depth = 3 }
-    data class Edit(val key: String, val item: JSONObject) : Screen { override val depth = 3 }
+    data class Section(val tab: HealthTab) : Screen { override val depth = 1 }
+    data class Detail(val key: String, val id: String) : Screen { override val depth = 2 }
+    data object Settings : Screen { override val depth = 2 }
+    data object Profiles : Screen { override val depth = 3 }
+    data class Contact(val type: String, val index: Int, val item: JSONObject) : Screen { override val depth = 4 }
+    data object Pin : Screen { override val depth = 4 }
+    data class Edit(val key: String, val item: JSONObject) : Screen { override val depth = 4 }
 }
 
 private val Screen.isSheet get() = this is Screen.Edit || this is Screen.Contact || this is Screen.Pin
@@ -207,15 +208,17 @@ fun HealthApp() {
         showProfiles -> Screen.Profiles
         showSettings -> Screen.Settings
         detail != null -> Screen.Detail(detail!!.first, detail!!.second)
+        tab != HealthTab.Oggi -> Screen.Section(tab)
         else -> Screen.Tabs
     }
-    // Le schermate con intestazione colorata vogliono icone di sistema chiare.
-    val lightBars = screen !is Screen.Locked && screen !is Screen.Welcome && screen !is Screen.Detail
+    // Tema scuro o schermate con intestazione colorata: icone di sistema chiare.
+    val darkSystem = androidx.compose.foundation.isSystemInDarkTheme()
+    val lightBars = !darkSystem && screen !is Screen.Locked && screen !is Screen.Welcome && screen !is Screen.Detail
     SideEffect {
         (context as? Activity)?.window?.let { window ->
             WindowCompat.getInsetsController(window, window.decorView).apply {
                 isAppearanceLightStatusBars = lightBars
-                isAppearanceLightNavigationBars = true
+                isAppearanceLightNavigationBars = !darkSystem
             }
         }
     }
@@ -266,6 +269,13 @@ fun HealthApp() {
                                 (fadeIn(tween(450)) + scaleIn(tween(450), initialScale = 1.04f)) togetherWith fadeOut(tween(300))
                             (from is Screen.Tabs && to is Screen.Detail) || (from is Screen.Detail && to is Screen.Tabs) ->
                                 fadeIn(tween(320, delayMillis = 60)) togetherWith fadeOut(tween(220))
+                            // Home e aree: la tessera si "apre" in una pagina che cresce, e torna a rimpicciolirsi.
+                            from is Screen.Tabs && to is Screen.Section ->
+                                (scaleIn(spring(dampingRatio = 0.82f, stiffness = 340f), initialScale = 0.88f) + fadeIn(tween(260))) togetherWith
+                                    (scaleOut(tween(320), targetScale = 1.06f) + fadeOut(tween(220)))
+                            from is Screen.Section && to is Screen.Tabs ->
+                                (scaleIn(spring(dampingRatio = 0.85f, stiffness = 340f), initialScale = 1.06f) + fadeIn(tween(260))) togetherWith
+                                    (scaleOut(tween(260), targetScale = 0.9f) + fadeOut(tween(200)))
                             to.isSheet && !from.isSheet ->
                                 (slideInVertically(spring(dampingRatio = 0.85f, stiffness = 380f)) { it / 4 } + fadeIn(tween(240))) togetherWith
                                     (fadeOut(tween(200)) + scaleOut(tween(260), targetScale = 0.94f))
@@ -353,7 +363,8 @@ fun HealthApp() {
                                     onOpenAttachment = { if (item != null) openAttachment(item) }
                                 )
                             }
-                            Screen.Tabs -> {
+                            Screen.Tabs, is Screen.Section -> {
+                                val tab = if (current is Screen.Section) current.tab else HealthTab.Oggi
                                 BackHandler(enabled = tab != HealthTab.Oggi) { selectTab(HealthTab.Oggi) }
                                 val header: @Composable (HealthTab) -> Unit = { page ->
                                     val (eyebrow, title) = when (page) {
@@ -364,15 +375,10 @@ fun HealthApp() {
                                         HealthTab.Documenti -> "Archivio" to "Documenti"
                                         HealthTab.Profilo -> "Scheda sanitaria" to "Profilo"
                                     }
-                                    PageHeader(eyebrow, title) {
+                                    val accent = when (page) { HealthTab.Visite -> scheme.secondary; HealthTab.Documenti -> scheme.tertiary; else -> scheme.primary }
+                                    PageHeader(eyebrow, title, onBack = if (page == HealthTab.Oggi) null else ({ selectTab(HealthTab.Oggi) }), accent = accent) {
                                         if (page == HealthTab.Oggi || page == HealthTab.Profilo) RoundIconButton(Icons.Rounded.Settings, "Impostazioni", { showSettings = true }, tint = scheme.onSurfaceVariant)
                                         ProfileAvatar(profileName.ifBlank { "Io" }, 44.dp) { showProfileSheet = true }
-                                    }
-                                }
-                                val overdue = remember(revision, tab) {
-                                    val now = LocalTime.now()
-                                    store.list("medicines").filter(::isMedicineActive).any { med ->
-                                        medicineTimesOn(med, LocalDate.now()).any { doseOverdue(it, store.dose(today(), med.str("id"), it).bool("taken"), now) }
                                     }
                                 }
                                 val fab: Triple<String, ImageVector, () -> Unit>? = when (tab) {
@@ -390,9 +396,6 @@ fun HealthApp() {
                                     // Lo sfondo con le stelle, come Dueffe Home e Chiarella.
                                     modifier = Modifier.starry(),
                                     containerColor = Color.Transparent,
-                                    bottomBar = {
-                                        FloatingNavBar(HealthTab.entries.map { NavItem(it.label, it.icon, badge = it == HealthTab.Oggi && overdue) }, tab.ordinal) { selectTab(HealthTab.entries[it]) }
-                                    },
                                     floatingActionButton = {
                                         AnimatedVisibility(fab != null, enter = scaleIn(spring(dampingRatio = 0.6f, stiffness = 500f)) + fadeIn(), exit = scaleOut() + fadeOut()) {
                                             lastFab?.let { (label, icon, action) ->
@@ -408,15 +411,8 @@ fun HealthApp() {
                                         }
                                     }
                                 ) { padding ->
-                                    AnimatedContent(
-                                        targetState = tab,
-                                        transitionSpec = {
-                                            val direction = if (targetState.ordinal > initialState.ordinal) 1 else -1
-                                            (slideInHorizontally(spring(dampingRatio = 0.9f, stiffness = 420f)) { direction * it / 5 } + fadeIn(tween(260))) togetherWith
-                                                (slideOutHorizontally(tween(220)) { -direction * it / 5 } + fadeOut(tween(160)))
-                                        },
-                                        label = "Cambio scheda"
-                                    ) { page ->
+                                    run {
+                                        val page = tab
                                         val listState = listStates.getValue(page)
                                         when (page) {
                                             HealthTab.Oggi -> HomeDashboard(store, revision, listState, padding, { header(page) },
@@ -482,7 +478,8 @@ fun HealthApp() {
                                         }
                                     }
                                     // Velo sotto la barra di stato: il contenuto che scorre non si sovrappone all'orologio.
-                                    Box(Modifier.fillMaxWidth().windowInsetsTopHeight(WindowInsets.statusBars).background(scheme.background.copy(alpha = 0.94f)))
+                                    Box(Modifier.fillMaxWidth().windowInsetsTopHeight(WindowInsets.statusBars.add(WindowInsets(top = 18.dp)))
+                                        .background(androidx.compose.ui.graphics.Brush.verticalGradient(0f to scheme.background, 0.6f to scheme.background.copy(alpha = 0.85f), 1f to Color.Transparent)))
                                 }
                             }
                         }

@@ -33,9 +33,9 @@ internal data class DocumentVisual(val icon: ImageVector, val accent: Color, val
 internal fun documentVisual(doc: JSONObject): DocumentVisual {
     val c = areaColors(Area.Document)
     return when (documentFormatLabel(doc)) {
-        "PDF" -> DocumentVisual(Icons.Rounded.PictureAsPdf, Color(0xFFD9365E), Color(0xFFFFE4EB))
-        "Immagine" -> DocumentVisual(Icons.Rounded.Image, Color(0xFF0E8A6E), Color(0xFFDDF5EE))
-        "Word" -> DocumentVisual(Icons.Rounded.Article, Color(0xFF2563C9), Color(0xFFE2ECFD))
+        "PDF" -> DocumentVisual(Icons.Rounded.PictureAsPdf, Color(0xFFE8466C), Color(0xFFE8466C).copy(alpha = 0.16f))
+        "Immagine" -> DocumentVisual(Icons.Rounded.Image, Color(0xFF19A884), Color(0xFF19A884).copy(alpha = 0.16f))
+        "Word" -> DocumentVisual(Icons.Rounded.Article, Color(0xFF3B7BE8), Color(0xFF3B7BE8).copy(alpha = 0.16f))
         "Nessun allegato" -> DocumentVisual(documentCategoryIcon(doc.str("categoria")), c.accent, c.container)
         else -> DocumentVisual(Icons.Rounded.InsertDriveFile, c.accent, c.container)
     }

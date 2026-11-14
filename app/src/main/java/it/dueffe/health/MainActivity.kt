@@ -66,9 +66,9 @@ internal fun selectedPhoneContact(context: android.content.Context, uri: android
     }
 }.getOrNull()
 
-/** Le aree dell'app: Oggi è la home, le altre si aprono dalle tessere della home. */
+/** Le aree dell'app: le prime quattro nella barra in basso, il Profilo dal pulsante in alto a destra. */
 enum class HealthTab(val label: String, val icon: ImageVector) {
-    Oggi("Oggi", Icons.Rounded.Home),
+    Oggi("Home", Icons.Rounded.Home),
     Terapie("Terapie", Icons.Rounded.Medication),
     Visite("Visite", Icons.Rounded.CalendarMonth),
     Documenti("Documenti", Icons.Rounded.FolderOpen),
@@ -129,6 +129,9 @@ fun HealthApp() {
     var historyMedicine by remember { mutableStateOf<JSONObject?>(null) }
     var bookingToComplete by remember { mutableStateOf("") }
     val listStates = HealthTab.entries.associateWith { rememberLazyListState() }
+    // Ultima scheda della barra: resta sotto il Profilo e ci si torna con indietro.
+    var lastMainTab by remember { mutableStateOf(HealthTab.Oggi) }
+    if (tab != HealthTab.Profilo) lastMainTab = tab
     fun selectTab(target: HealthTab, targetFilter: String? = null) {
         if (target != tab) { search = "" }
         tab = target
@@ -208,7 +211,7 @@ fun HealthApp() {
         showProfiles -> Screen.Profiles
         showSettings -> Screen.Settings
         detail != null -> Screen.Detail(detail!!.first, detail!!.second)
-        tab != HealthTab.Oggi -> Screen.Section(tab)
+        tab == HealthTab.Profilo -> Screen.Section(tab)
         else -> Screen.Tabs
     }
     // Tema scuro o schermate con intestazione colorata: icone di sistema chiare.
@@ -364,8 +367,8 @@ fun HealthApp() {
                                 )
                             }
                             Screen.Tabs, is Screen.Section -> {
-                                val tab = if (current is Screen.Section) current.tab else HealthTab.Oggi
-                                BackHandler(enabled = tab != HealthTab.Oggi) { selectTab(HealthTab.Oggi) }
+                                val tab = if (current is Screen.Section) current.tab else lastMainTab
+                                BackHandler(enabled = tab != HealthTab.Oggi) { selectTab(if (tab == HealthTab.Profilo) lastMainTab else HealthTab.Oggi) }
                                 val header: @Composable (HealthTab) -> Unit = { page ->
                                     val (eyebrow, title) = when (page) {
                                         HealthTab.Oggi -> LocalDate.now().format(DateTimeFormatter.ofPattern("EEEE d MMMM", Locale.ITALIAN)) to
@@ -376,9 +379,10 @@ fun HealthApp() {
                                         HealthTab.Profilo -> "Scheda sanitaria" to "Profilo"
                                     }
                                     val accent = when (page) { HealthTab.Visite -> scheme.secondary; HealthTab.Documenti -> scheme.tertiary; else -> scheme.primary }
-                                    PageHeader(eyebrow, title, onBack = if (page == HealthTab.Oggi) null else ({ selectTab(HealthTab.Oggi) }), accent = accent) {
+                                    PageHeader(eyebrow, title, onBack = if (page == HealthTab.Profilo) ({ selectTab(lastMainTab) }) else null, accent = accent) {
                                         if (page == HealthTab.Oggi || page == HealthTab.Profilo) RoundIconButton(Icons.Rounded.Settings, "Impostazioni", { showSettings = true }, tint = scheme.onSurfaceVariant)
-                                        ProfileAvatar(profileName.ifBlank { "Io" }, 44.dp) { showProfileSheet = true }
+                                        // Dalle schede l'avatar apre il Profilo; dentro il Profilo cambia profilo.
+                                        ProfileAvatar(profileName.ifBlank { "Io" }, 44.dp) { if (page == HealthTab.Profilo) showProfileSheet = true else selectTab(HealthTab.Profilo) }
                                     }
                                 }
                                 val fab: Triple<String, ImageVector, () -> Unit>? = when (tab) {
@@ -389,6 +393,12 @@ fun HealthApp() {
                                     HealthTab.Documenti -> Triple("Nuovo documento", Icons.Rounded.Add) { editing = "documents" to JSONObject() }
                                     HealthTab.Profilo -> null
                                 }
+                                val overdue = remember(revision, tab) {
+                                    val now = LocalTime.now()
+                                    store.list("medicines").filter(::isMedicineActive).any { med ->
+                                        medicineTimesOn(med, LocalDate.now()).any { doseOverdue(it, store.dose(today(), med.str("id"), it).bool("taken"), now) }
+                                    }
+                                }
                                 var lastFab by remember { mutableStateOf(fab) }
                                 if (fab != null) lastFab = fab
                                 val fabExpanded = listStates.getValue(tab).firstVisibleItemIndex < 2
@@ -396,6 +406,12 @@ fun HealthApp() {
                                     // Lo sfondo con le stelle, come Dueffe Home e Chiarella.
                                     modifier = Modifier.starry(),
                                     containerColor = Color.Transparent,
+                                    bottomBar = {
+                                        if (tab != HealthTab.Profilo) {
+                                            val navTabs = HealthTab.entries - HealthTab.Profilo
+                                            FloatingNavBar(navTabs.map { NavItem(it.label, it.icon, badge = it == HealthTab.Oggi && overdue) }, navTabs.indexOf(tab)) { selectTab(navTabs[it]) }
+                                        }
+                                    },
                                     floatingActionButton = {
                                         AnimatedVisibility(fab != null, enter = scaleIn(spring(dampingRatio = 0.6f, stiffness = 500f)) + fadeIn(), exit = scaleOut() + fadeOut()) {
                                             lastFab?.let { (label, icon, action) ->
@@ -411,8 +427,15 @@ fun HealthApp() {
                                         }
                                     }
                                 ) { padding ->
-                                    run {
-                                        val page = tab
+                                    AnimatedContent(
+                                        targetState = tab,
+                                        transitionSpec = {
+                                            val direction = if (targetState.ordinal > initialState.ordinal) 1 else -1
+                                            (slideInHorizontally(spring(dampingRatio = 0.9f, stiffness = 420f)) { direction * it / 5 } + fadeIn(tween(260))) togetherWith
+                                                (slideOutHorizontally(tween(220)) { -direction * it / 5 } + fadeOut(tween(160)))
+                                        },
+                                        label = "Cambio scheda"
+                                    ) { page ->
                                         val listState = listStates.getValue(page)
                                         when (page) {
                                             HealthTab.Oggi -> HomeDashboard(store, revision, listState, padding, { header(page) },

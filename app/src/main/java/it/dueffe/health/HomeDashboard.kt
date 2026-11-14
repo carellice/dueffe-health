@@ -84,8 +84,6 @@ fun HomeDashboard(
     val visits = remember(revision, store.activeId, date) {
         store.list("appointments").filter { !it.bool("completata") && it.str("data") >= today() }.sortedWith(compareBy({ it.str("data") }, { it.str("ora") }))
     }
-    val bookings = remember(revision, store.activeId) { store.list("bookingReminders").count { !it.bool("prenotata") } }
-    val documents = remember(revision, store.activeId) { store.list("documents").size }
     val doses = remember(revision, store.activeId, date) { meds.flatMap { med -> medicineTimesOn(med, date).map { med to it } }.sortedBy { it.second } }
     fun isTaken(dose: Pair<JSONObject, String>) = store.dose(today(), dose.first.str("id"), dose.second).bool("taken")
     val takenCount = doses.count(::isTaken)
@@ -112,20 +110,6 @@ fun HomeDashboard(
                         Text(lowStock.joinToString { it.str("nome") }, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     }
                     Icon(Icons.Rounded.ChevronRight, null, tint = HealthStatus.warning)
-                }
-            }
-        }
-        item {
-            Column(Modifier.enterAnimation(3), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                val s = MaterialTheme.colorScheme
-                val overdue = doses.any { !isTaken(it) && doseOverdue(it.second, false, now) }
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    AreaHubTile("Terapie", if (overdue) "Dosi in ritardo" else "Farmaci attivi", Icons.Rounded.Medication, s.primary, meds.size, Modifier.weight(1f), badge = overdue) { onTab(HealthTab.Terapie, null) }
-                    AreaHubTile("Visite", if (bookings > 0) "$bookings da prenotare" else "In programma", Icons.Rounded.CalendarMonth, s.secondary, visits.size, Modifier.weight(1f), badge = bookings > 0) { onTab(HealthTab.Visite, null) }
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    AreaHubTile("Documenti", "Referti e ricette", Icons.Rounded.FolderOpen, s.tertiary, documents, Modifier.weight(1f)) { onTab(HealthTab.Documenti, null) }
-                    AreaHubTile("Profilo", "Scheda sanitaria", Icons.Rounded.Person, lerp(s.primary, s.secondary, 0.5f), null, Modifier.weight(1f)) { onTab(HealthTab.Profilo, null) }
                 }
             }
         }
